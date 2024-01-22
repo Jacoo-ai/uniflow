@@ -1,6 +1,7 @@
 """All Servers including Extract Server, Transform Server and Pipeline Server."""
 
 import traceback
+import uuid
 from concurrent import futures
 from queue import Queue
 from typing import Any, Dict, List, Mapping, Tuple
@@ -11,6 +12,8 @@ from uniflow.constants import EXTRACT, RATER, TRANSFORM
 from uniflow.flow.config import ExtractConfig, RaterConfig, TransformConfig
 from uniflow.flow.flow_factory import FlowFactory
 from uniflow.op.op import OpScope
+import asyncio
+
 
 ###############################################################################
 #                                Extract Server                               #
@@ -43,7 +46,7 @@ class ExtractServer:
                 self._flow_queue.put(self._flow_cls(**kwargs))
 
     def _run_flow(
-        self, input_list: Mapping[str, Any], index: int
+            self, input_list: Mapping[str, Any], index: int
     ) -> Tuple[int, Mapping[str, Any]]:
         """Run the flow
 
@@ -66,7 +69,7 @@ class ExtractServer:
         return (index, output)
 
     def _run_flow_wrapper(
-        self, input_list: Mapping[str, Any], i: int
+            self, input_list: Mapping[str, Any], i: int
     ) -> Tuple[int, Mapping[str, Any]]:
         """Wrapper for _run_flow
 
@@ -96,7 +99,7 @@ class ExtractServer:
             results = [None] * len(input_list)
 
             for future in tqdm(
-                futures.as_completed(output_futures), total=len(input_list)
+                    futures.as_completed(output_futures), total=len(input_list)
             ):
                 index = output_futures[future]
                 results[index] = future.result()[1]
@@ -139,7 +142,7 @@ class TransformServer:
                 )
 
     def _run_flow(
-        self, input_list: Mapping[str, Any], index: int
+            self, input_list: Mapping[str, Any], index: int
     ) -> Tuple[int, Mapping[str, Any]]:
         """Run the flow
 
@@ -165,7 +168,7 @@ class TransformServer:
         return (index, output)
 
     def _run_flow_wrapper(
-        self, input_list: Mapping[str, Any], i: int
+            self, input_list: Mapping[str, Any], i: int
     ) -> Tuple[int, Mapping[str, Any]]:
         """Wrapper for _run_flow
 
@@ -179,7 +182,7 @@ class TransformServer:
         return self._run_flow(input_list, i)
 
     def _divide_data_into_batches(
-        self, input_list: List[Mapping[str, Any]]
+            self, input_list: List[Mapping[str, Any]]
     ) -> List[Mapping[str, Any]]:
         """Divide the list into batches
 
@@ -202,7 +205,7 @@ class TransformServer:
         # Main logic to divide the list into batches
         batched_list = []
         for i in range(0, len(input_list), batch_size):
-            batched_list.append(input_list[i : i + batch_size])  # noqa: E203
+            batched_list.append(input_list[i: i + batch_size])  # noqa: E203
         return batched_list
 
     def run(self, input_list: List[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
@@ -224,16 +227,35 @@ class TransformServer:
             results = [None] * len(batch_data)
 
             for future in tqdm(
-                futures.as_completed(output_futures), total=len(batch_data)
+                    futures.as_completed(output_futures), total=len(batch_data)
             ):
                 index = output_futures[future]
                 results[index] = future.result()[1]
         return results
 
-    def async_run(self):
+    async def async_run(self, input_list: List[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
         """Run the flow asynchronously"""
         # TODO: Implement async server
         print("Server running async")
+        batch_data = self._divide_data_into_batches(input_list)
+
+        with futures.ThreadPoolExecutor(max_workers=self._num_thread) as executor:
+            results = [None] * len(batch_data)
+            tasks = []
+
+            for i, input_data in enumerate(batch_data):
+                task = asyncio.create_task(self._process_batch(executor, input_data, i, results))
+                tasks.append(task)
+
+            await asyncio.gather(*tasks)
+
+        return results
+
+    async def _process_batch(self, executor, input_data, index, results):
+        result = await asyncio.wrap_future(
+            executor.submit(self._run_flow_wrapper, input_data, index)
+        )
+        results[index] = result[1]
 
 
 ###############################################################################
@@ -269,7 +291,7 @@ class RaterServer:
                 )
 
     def _run_flow(
-        self, input_list: Mapping[str, Any], index: int
+            self, input_list: Mapping[str, Any], index: int
     ) -> Tuple[int, Mapping[str, Any]]:
         """Run the flow
 
@@ -295,7 +317,7 @@ class RaterServer:
         return (index, output)
 
     def _run_flow_wrapper(
-        self, input_list: Mapping[str, Any], i: int
+            self, input_list: Mapping[str, Any], i: int
     ) -> Tuple[int, Mapping[str, Any]]:
         """Wrapper for _run_flow
 
@@ -309,7 +331,7 @@ class RaterServer:
         return self._run_flow(input_list, i)
 
     def _divide_data_into_batches(
-        self, input_list: List[Mapping[str, Any]]
+            self, input_list: List[Mapping[str, Any]]
     ) -> List[Mapping[str, Any]]:
         """Divide the list into batches
 
@@ -332,7 +354,7 @@ class RaterServer:
         # Main logic to divide the list into batches
         batched_list = []
         for i in range(0, len(input_list), batch_size):
-            batched_list.append(input_list[i : i + batch_size])  # noqa: E203
+            batched_list.append(input_list[i: i + batch_size])  # noqa: E203
         return batched_list
 
     def run(self, input_list: List[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
@@ -354,7 +376,7 @@ class RaterServer:
             results = [None] * len(batch_data)
 
             for future in tqdm(
-                futures.as_completed(output_futures), total=len(batch_data)
+                    futures.as_completed(output_futures), total=len(batch_data)
             ):
                 index = output_futures[future]
                 results[index] = future.result()[1]

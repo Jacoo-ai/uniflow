@@ -19,6 +19,7 @@ from uniflow.op.model.model_config import (
     SageMakerModelConfig,
 )
 
+
 ###########################################################
 #                   All Extract Configs                   #
 ###########################################################
@@ -223,6 +224,17 @@ class TransformCopyConfig(TransformConfig):
 
 
 @dataclass
+class ExpandReduceConfig(TransformConfig):
+    """Expand and Reduce Config Class"""
+
+    flow_name: str = "ExpandReduceFlow"
+    prompt_template: PromptTemplate = field(
+        default_factory=lambda: PromptTemplate(instruction="", few_shot_prompt=[])
+    )
+    model_config: ModelConfig = field(default_factory=lambda: {})
+
+
+@dataclass
 class TransformForGenerationOpenAIGPT3p5Config(TransformConfig):
     flow_name: str = "TransformOpenAIFlow"
     model_config: ModelConfig = field(
@@ -357,8 +369,8 @@ class RaterConfig:
         # This might need to be extended to other model configs in the future.
         if isinstance(self.model_config, HuggingfaceModelConfig):
             if (
-                self.model_config.batch_size % self.model_config.num_return_sequences
-                != 0  # noqa E501
+                    self.model_config.batch_size % self.model_config.num_return_sequences
+                    != 0  # noqa E501
             ):
                 raise ValueError(
                     f"batch_size {self.model_config.batch_size} must be divisible by"

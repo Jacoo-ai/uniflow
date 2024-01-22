@@ -67,10 +67,12 @@ class TransformClient:
         output = self._server.run(input_list)
         return output
 
-    def async_run(self) -> None:
+    async def async_run(self, input_list: List[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
         """Run the flow asynchronously"""
         # TODO: Implement async client
         print("Client running async")
+        output = await self._server.async_run(input_list)
+        return output
 
 
 class RaterClient:
